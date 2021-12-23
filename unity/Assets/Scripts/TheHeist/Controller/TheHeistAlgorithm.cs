@@ -18,6 +18,9 @@ public class TheHeistAlgorithm : MonoBehaviour {
 	[SerializeField]
 	List<Line> lines;
 
+	static TreeNode root = null;
+	enum INTERVAL_LOCATION {LEFT,RIGHT,PARTIALLY_LEFT, PARTIALLY_RIGHT, ENCLOSED, OVERLAPPING, DONTKNOW, SAME};
+
 
 	//class to keep track of line properties
 	class Line
@@ -35,22 +38,24 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		public Vector2 start, end;
 		public float startAngle = 0f;
 		public float endAngle = 0f;
-		public float startInterval = 0f;
-		public float endInterval = 0f;
+		public float minInterval = 0f;
+		public float maxInterval = 0f;
 	}
 	class TreeNode
 	{
 		public TreeNode(Line line)
 		{
 			this.line = line;
+			this.minInterval = line.minInterval;
+			this.maxInterval = line.maxInterval;
 		}
 		public bool isRoot = false;
 		public bool isLeaf = false;
-		public bool isIntersection = false;
-		public TreeNode leftChild;
-		public TreeNode rightChild;
+		public bool hasIntersection = false;
+		public TreeNode leftChild = null;
+		public TreeNode rightChild = null;
 		public Line line;
-		public float minInterval, maxInterval = -1;
+		public float minInterval, maxInterval;
 	}
 
 	private void updatePlayerPos(Vector2 newPos)
@@ -75,7 +80,6 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		updateGuardOrientation(guardOrientation);
 
 		List<Line> sortedLines = sortOnRotationalSweep();
-
 		generateIntervalTree(sortedLines);
 
 
@@ -84,32 +88,105 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		return true;
 	}
 
-	TreeNode generateIntervalTree(List<Line> sortedLines)
+	static void generateIntervalTree(List<Line> sortedLines)
 	{
-		TreeNode root = new TreeNode(sortedLines[0]);
+		root = new TreeNode(sortedLines[0]);
 		root.isRoot = true;
-		root.minInterval = root.line.startInterval;
-		root.maxInterval = root.line.endInterval;
+
 		foreach(Line l in sortedLines)
 		{
-			//TODO EVENTS HANDLEN
+			insertLineIntoTree(l, root);
 		}
+	}
+
+	static void insertLineIntoTree(Line l, TreeNode node)
+	{
+		INTERVAL_LOCATION il = checkInterval(l, node.minInterval, node.maxInterval);
+		switch (il)
+		{
+			case INTERVAL_LOCATION.SAME:
+				{
+					if (l.start == node.line.start && l.end == node.line.end)
+						break;//do nothing it is the same line
+					else
+						break; //we need to check
+				} break;
+			case INTERVAL_LOCATION.LEFT:
+				{
+					if (node.leftChild == null)
+						node.leftChild = new TreeNode(l);
+					else
+						insertLineIntoTree(l, node.leftChild);
+				}	break;
+			case INTERVAL_LOCATION.RIGHT:
+				{
+					if (node.rightChild == null)
+						node.rightChild = new TreeNode(l);
+					else
+						insertLineIntoTree(l, node.rightChild);
+				}	break;
+			case INTERVAL_LOCATION.PARTIALLY_LEFT:
+				{
+
+
+
+				}	break;
+
+			default: print("Can't insert"); break;
+		}
+
+	}
+
+	TreeNode balanceTree(TreeNode root)
+	{
 
 
 		return root;
 	}
 
+	static INTERVAL_LOCATION checkInterval(Line l, float minInterval, float maxInterval)
+	{
+		if (l.minInterval == minInterval && l.maxInterval == maxInterval)
+			return INTERVAL_LOCATION.SAME;
+
+		if(l.minInterval < minInterval)
+		{
+			if (l.maxInterval < minInterval)
+				return INTERVAL_LOCATION.LEFT;
+			else if (l.maxInterval < maxInterval)
+				return INTERVAL_LOCATION.PARTIALLY_LEFT;
+		}
+		if(l.minInterval >= minInterval && l.minInterval <= maxInterval)
+		{
+			if (l.maxInterval <= maxInterval)
+				return INTERVAL_LOCATION.ENCLOSED;
+			else if (l.maxInterval > maxInterval)
+				return INTERVAL_LOCATION.PARTIALLY_RIGHT;
+		}
+		if(l.minInterval > maxInterval && l.maxInterval > maxInterval)
+		{
+			return INTERVAL_LOCATION.RIGHT;
+		}
+		if(l.minInterval < minInterval && l.maxInterval > maxInterval)
+		{
+			return INTERVAL_LOCATION.OVERLAPPING;
+		}
+
+		return INTERVAL_LOCATION.DONTKNOW;
+	}
+
+
 	List<Line> sortOnRotationalSweep()
 	{
 		//translate lines so the guard is at 0,0
-		List<Line> sortedLines = new List<Line>(lines);
-		foreach(Line l in sortedLines)
+		List<Line> tempLines = new List<Line>(lines);
+		foreach(Line l in tempLines)
 		{
 			l.translate(guardPos*-1);
 		}
 		
 		//calculate angle for each line
-		foreach(Line l in sortedLines)
+		foreach(Line l in tempLines)
 		{
 			l.startAngle = Vector2.SignedAngle(Vector2.up, l.start);
 			l.endAngle = Vector2.SignedAngle(Vector2.up, l.end);
@@ -121,27 +198,34 @@ public class TheHeistAlgorithm : MonoBehaviour {
 			//may be buggy because the interval can lie left or right of the guard. (definitely buggy)
 			if (l.startAngle < l.endAngle)
 			{
-				l.startInterval = l.startAngle;
-				l.endInterval = l.endAngle;
+				l.minInterval = l.startAngle;
+				l.maxInterval = l.endAngle;
 			}
 			else
 			{
-				l.startInterval = l.endAngle;
-				l.endInterval = l.startAngle;
+				l.minInterval = l.endAngle;
+				l.maxInterval = l.startAngle;
 			}
-				
+			if(l.maxInterval > l.minInterval + 180)
+			{
+				float temp = l.minInterval;
+				l.minInterval = l.maxInterval;
+				l.maxInterval = temp;
+			}
 		}
 
-		//sort on smallest angle
-		sortedLines.Sort(delegate (Line a, Line b)
-		{
-			if (a.startInterval <= b.startInterval)
-				return 1;
-			else
-				return 0;
-		});
+		//sort on smallest start of interval
+		tempLines.Sort((x, y) => x.minInterval.CompareTo(y.minInterval));
 
-		return sortedLines;
+		//print intervals
+		foreach (Line l in tempLines)
+		{
+			print("Line");
+			print("min: " +l.minInterval);
+			print("max: " +l.maxInterval);
+		}
+
+		return tempLines;
 	}
 
 	void setupLevel(Vector2 playerPos, Vector2 guardPos, Vector2 guardOrientation, float coneWidth, float coneLength, List<Line> lines)
@@ -163,19 +247,31 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		//lines.Add(new Line(new Vector2(1f, -1f), new Vector2(-1f, -1f)));
 		//lines.Add(new Line(new Vector2(-1f, -1f), new Vector2(-1f, 1f)));
 
-		lines.Add(new Line(new Vector2(0f, 1f), new Vector2(1f, 0f)));
-		lines.Add(new Line(new Vector2(1f, 0f), new Vector2(0f, -1f)));
-		lines.Add(new Line(new Vector2(0f, -1f), new Vector2(-1f, 0f)));
-		lines.Add(new Line(new Vector2(-1f, 0f), new Vector2(0f, 1f)));
+		//lines.Add(new Line(new Vector2(0f, 1f), new Vector2(1f, 0f)));
+		//lines.Add(new Line(new Vector2(1f, 0f), new Vector2(0f, -1f)));
+		//lines.Add(new Line(new Vector2(0f, -1f), new Vector2(-1f, 0f)));
+		//lines.Add(new Line(new Vector2(-1f, 0f), new Vector2(0f, 1f)));
 
+		//lines.Add(new Line(new Vector2(0f, 2f), new Vector2(2f, 0f)));
+		//lines.Add(new Line(new Vector2(1.9f, 0f), new Vector2(0f, -1.9f)));
+		//lines.Add(new Line(new Vector2(0f, -1.8f), new Vector2(-1.8f, 0f)));
+		//lines.Add(new Line(new Vector2(-1.7f, 0f), new Vector2(0f, 1.7f)));
+
+		lines.Add(new Line(new Vector2(1f, 1f), new Vector2(3f, 1f)));
+		lines.Add(new Line(new Vector2(4f, 1f), new Vector2(5f, 1f)));
+		lines.Add(new Line(new Vector2(-1f, 1f), new Vector2(-3f, 1f)));
+		lines.Add(new Line(new Vector2(-4f, 1f), new Vector2(-6f, 1f)));
 
 
 		setupLevel(playerPos, guardPos, guardOrientation, coneWidth, coneLength, lines);
-		foreach(Line l in sortOnRotationalSweep())
-		{
-			print(l.startInterval);
-			print(l.endInterval);
-		}
+
+		checkPlayerVisibility(playerPos, guardPos, guardOrientation);
+
+		//foreach(Line l in sortOnRotationalSweep())
+		//{
+		//	print(l.minInterval);
+		//	print(l.maxInterval);
+		//}
 	}
 
 }
