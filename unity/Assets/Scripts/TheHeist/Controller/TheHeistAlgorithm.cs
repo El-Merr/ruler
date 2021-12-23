@@ -16,10 +16,10 @@ public class TheHeistAlgorithm : MonoBehaviour {
 	[SerializeField]
 	float coneLength;
 	[SerializeField]
-	List<Line> lines;
+	List<Line> OriginalLines;
 
 	static TreeNode root = null;
-	enum INTERVAL_LOCATION {LEFT,RIGHT,PARTIALLY_LEFT, PARTIALLY_RIGHT, ENCLOSED, OVERLAPPING, DONTKNOW, SAME};
+	enum INTERVAL_LOCATION {LEFT,RIGHT,PARTIALLY_LEFT, PARTIALLY_RIGHT, ENCLOSED, ENCLOSING, UNKOWN};
 
 
 	//class to keep track of line properties
@@ -79,7 +79,7 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		updateGuardPos(guardPos);
 		updateGuardOrientation(guardOrientation);
 
-		List<Line> sortedLines = sortOnRotationalSweep();
+		List<Line> sortedLines = sortOnRotationalSweep(OriginalLines);
 		generateIntervalTree(sortedLines);
 
 
@@ -101,16 +101,9 @@ public class TheHeistAlgorithm : MonoBehaviour {
 
 	static void insertLineIntoTree(Line l, TreeNode node)
 	{
-		INTERVAL_LOCATION il = checkInterval(l, node.minInterval, node.maxInterval);
+		INTERVAL_LOCATION il = compareIntervals(l.minInterval,l.maxInterval, node.minInterval, node.maxInterval);
 		switch (il)
 		{
-			case INTERVAL_LOCATION.SAME:
-				{
-					if (l.start == node.line.start && l.end == node.line.end)
-						break;//do nothing it is the same line
-					else
-						break; //we need to check
-				} break;
 			case INTERVAL_LOCATION.LEFT:
 				{
 					if (node.leftChild == null)
@@ -127,10 +120,26 @@ public class TheHeistAlgorithm : MonoBehaviour {
 				}	break;
 			case INTERVAL_LOCATION.PARTIALLY_LEFT:
 				{
-
+					//check for intersection or if one of the two is visible.
 
 
 				}	break;
+			case INTERVAL_LOCATION.PARTIALLY_RIGHT:
+				{
+					//check for intersection or if one of the two is visible.
+
+				}
+				break;
+			case INTERVAL_LOCATION.ENCLOSED:
+				{
+					//check which one is visible and check for intersection.
+					print("In enclosed");
+				} break;
+			case INTERVAL_LOCATION.ENCLOSING:
+				{
+					//check which one is visible and check for intersection.
+					print("In enclosing");
+				} break;
 
 			default: print("Can't insert"); break;
 		}
@@ -144,48 +153,55 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		return root;
 	}
 
-	static INTERVAL_LOCATION checkInterval(Line l, float minInterval, float maxInterval)
+	//Check if a lies left/right/in etc of b.
+	static INTERVAL_LOCATION compareIntervals(float a_min, float a_max, float b_min, float b_max)
 	{
-		if (l.minInterval == minInterval && l.maxInterval == maxInterval)
-			return INTERVAL_LOCATION.SAME;
+		//check if we have a  special case because one interval crosses 0.
+		bool aSpecial = false;
+		bool bSpecial = false;
 
-		if(l.minInterval < minInterval)
+		if (a_min > a_max)
+			aSpecial = true;
+		if (b_min > b_max)
+			bSpecial = true;
+
+		if(!aSpecial && !bSpecial)
 		{
-			if (l.maxInterval < minInterval)
+			if (a_min < b_min && a_max < b_min)
 				return INTERVAL_LOCATION.LEFT;
-			else if (l.maxInterval < maxInterval)
+			if (a_min > b_max && a_max > b_max)
+				return INTERVAL_LOCATION.RIGHT;
+			if (a_min <= b_min && a_max > b_min && a_max < b_max)
 				return INTERVAL_LOCATION.PARTIALLY_LEFT;
-		}
-		if(l.minInterval >= minInterval && l.minInterval <= maxInterval)
-		{
-			if (l.maxInterval <= maxInterval)
-				return INTERVAL_LOCATION.ENCLOSED;
-			else if (l.maxInterval > maxInterval)
+			if (a_min > b_min && a_min <= b_max && a_max > b_max)
 				return INTERVAL_LOCATION.PARTIALLY_RIGHT;
-		}
-		if(l.minInterval > maxInterval && l.maxInterval > maxInterval)
-		{
-			return INTERVAL_LOCATION.RIGHT;
-		}
-		if(l.minInterval < minInterval && l.maxInterval > maxInterval)
-		{
-			return INTERVAL_LOCATION.OVERLAPPING;
+			if (a_min >= b_min && a_min <= b_max && a_max >= b_min && a_max <= b_max)
+				return INTERVAL_LOCATION.ENCLOSED;
+			if (a_min < b_min && a_max > b_max)
+				return INTERVAL_LOCATION.ENCLOSING;
+			else
+			{
+				Debug.LogError("Unknown interval comparison");
+				return INTERVAL_LOCATION.UNKOWN;
+			}				
 		}
 
-		return INTERVAL_LOCATION.DONTKNOW;
+		Debug.LogError("Unknown interval comparison");
+		return INTERVAL_LOCATION.UNKOWN;
 	}
 
 
-	List<Line> sortOnRotationalSweep()
+	List<Line> sortOnRotationalSweep(List<Line> lines)
 	{
 		//translate lines so the guard is at 0,0
 		List<Line> tempLines = new List<Line>(lines);
+		List<Line> linesToBeAdded = new List<Line>();
 		foreach(Line l in tempLines)
 		{
 			l.translate(guardPos*-1);
 		}
 		
-		//calculate angle for each line
+		//calculate angle for each line and normalize them to be between 0 and 360
 		foreach(Line l in tempLines)
 		{
 			l.startAngle = Vector2.SignedAngle(Vector2.up, l.start);
@@ -194,8 +210,8 @@ public class TheHeistAlgorithm : MonoBehaviour {
 				l.startAngle += 360;
 			if (l.endAngle < 0)
 				l.endAngle += 360;
-
-			//may be buggy because the interval can lie left or right of the guard. (definitely buggy)
+			
+			//Set the interval for the line
 			if (l.startAngle < l.endAngle)
 			{
 				l.minInterval = l.startAngle;
@@ -206,14 +222,32 @@ public class TheHeistAlgorithm : MonoBehaviour {
 				l.minInterval = l.endAngle;
 				l.maxInterval = l.startAngle;
 			}
+
+			//flip the interval if nessesary
 			if(l.maxInterval > l.minInterval + 180)
 			{
-				float temp = l.minInterval;
+				float tempMin = l.minInterval;
 				l.minInterval = l.maxInterval;
-				l.maxInterval = temp;
+				l.maxInterval = tempMin;
+			}
+
+			//create two intervals corresponding to a line when the interval contains 0
+			if (l.minInterval > l.maxInterval)
+			{
+				//add a new interval for the line
+				Line newLine = new Line(l.start, l.end);
+				newLine.startAngle = l.startAngle;
+				newLine.endAngle = l.endAngle;
+				newLine.minInterval = 0;
+				newLine.maxInterval = l.maxInterval;
+				linesToBeAdded.Add(newLine);
+				//update original interval
+				l.maxInterval = 360;
 			}
 		}
 
+		//add the aditional intervals of the lines
+		tempLines.AddRange(linesToBeAdded);
 		//sort on smallest start of interval
 		tempLines.Sort((x, y) => x.minInterval.CompareTo(y.minInterval));
 
@@ -235,7 +269,7 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		updateGuardOrientation(guardOrientation);
 		this.coneWidth = coneWidth;
 		this.coneLength = coneLength;
-		this.lines = lines;
+		this.OriginalLines = lines;
 	}
 
 	void Start()
@@ -261,6 +295,7 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		lines.Add(new Line(new Vector2(4f, 1f), new Vector2(5f, 1f)));
 		lines.Add(new Line(new Vector2(-1f, 1f), new Vector2(-3f, 1f)));
 		lines.Add(new Line(new Vector2(-4f, 1f), new Vector2(-6f, 1f)));
+		lines.Add(new Line(new Vector2(-1f, 1f), new Vector2(1f, 1f)));
 
 
 		setupLevel(playerPos, guardPos, guardOrientation, coneWidth, coneLength, lines);
