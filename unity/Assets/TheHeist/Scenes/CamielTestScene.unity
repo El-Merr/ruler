@@ -121,7 +121,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 491934251}
-  - component: {fileID: 491934252}
   - component: {fileID: 491934253}
   m_Layer: 0
   m_Name: GameObject
@@ -143,22 +142,6 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &491934252
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 0}
-  m_GameObject: {fileID: 491934250}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7bc773d1def2d01458ce04f9ae194ea6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  playerPos: {x: 0, y: 0}
-  guardPos: {x: 0, y: 0}
-  guardOrientation: {x: 0, y: 0}
-  coneWidth: 0
-  coneLength: 0
 --- !u!114 &491934253
 MonoBehaviour:
   m_ObjectHideFlags: 0
