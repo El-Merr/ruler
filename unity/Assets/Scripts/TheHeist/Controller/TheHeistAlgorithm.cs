@@ -19,8 +19,8 @@ public class TheHeistAlgorithm : MonoBehaviour {
 	List<Line> OriginalLines;
 
 	static TreeNode root = null;
-	enum INTERVAL_LOCATION { LEFT, RIGHT, PARTIALLY_LEFT, PARTIALLY_RIGHT, ENCLOSED, ENCLOSING, UNKOWN };
-
+	enum INTERVAL_LOCATION { LEFT, RIGHT, PARTIALLY_LEFT, PARTIALLY_RIGHT, CONNECTED_LEFT, CONNECTED_RIGHT, ENCLOSED, ENCLOSING, UNKOWN };
+	enum EVENTTYPE { START, END }
 
 	//class to keep track of line properties
 	class Line
@@ -41,6 +41,21 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		public float minInterval = 0f;
 		public float maxInterval = 0f;
 	}
+
+	
+
+	//class IntervalEvent
+	//{
+	//	public IntervalEvent(EVENTTYPE t, Line lStart, Line lEnd)
+	//	{
+	//		this.t = t;
+	//		this.lStart = lStart;
+	//		this.lEnd = lEnd;
+	//	}
+
+	//	public Line lStart, lEnd;
+	//	public EVENTTYPE t;
+	//}
 
 	class TreeNode
 	{
@@ -149,48 +164,53 @@ public class TheHeistAlgorithm : MonoBehaviour {
 
 	}
 
-	TreeNode balanceTree(TreeNode root)
-	{
 
-
-		return root;
-	}
 
 	//Check if a lies left/right/in etc of b.
 	static INTERVAL_LOCATION compareIntervals(float a_min, float a_max, float b_min, float b_max)
 	{
-		//check if we have a  special case because one interval crosses 0.
-		bool aSpecial = false;
-		bool bSpecial = false;
+		//if (a_min < b_min && a_min < b_max && a_max < b_min && a_max < b_max)
+		//	return INTERVAL_LOCATION.UNKOWN;
+		//if (a_min < b_min && a_min < b_max && a_max < b_min && a_max < b_max)
+		//	return INTERVAL_LOCATION.LEFT;
+		//if (a_min < b_min && a_min < b_max && a_max < b_min && a_max < b_max)
+		//	return INTERVAL_LOCATION.RIGHT;
+		//if (a_min < b_min && a_min < b_max && a_max < b_min && a_max < b_max)
+		//	return INTERVAL_LOCATION.CONNECTED_LEFT;
+		//if (a_min < b_min && a_min < b_max && a_max < b_min && a_max < b_max)
+		//	return INTERVAL_LOCATION.CONNECTED_RIGHT;
+		//if (a_min < b_min && a_min < b_max && a_max < b_min && a_max < b_max)
+		//	return INTERVAL_LOCATION.PARTIALLY_LEFT;
+		//if (a_min < b_min && a_min < b_max && a_max < b_min && a_max < b_max)
+		//	return INTERVAL_LOCATION.PARTIALLY_RIGHT;
+		//if (a_min < b_min && a_min < b_max && a_max < b_min && a_max < b_max)
+		//	return INTERVAL_LOCATION.ENCLOSED;
+		//if (a_min < b_min && a_min < b_max && a_max < b_min && a_max < b_max)
+		//	return INTERVAL_LOCATION.ENCLOSING;
 
-		if (a_min > a_max)
-			aSpecial = true;
-		if (b_min > b_max)
-			bSpecial = true;
 
-		if(!aSpecial && !bSpecial)
+
+		if (a_min < b_min && a_max < b_min)
+			return INTERVAL_LOCATION.LEFT;
+		if (a_min > b_max && a_max > b_max)
+			return INTERVAL_LOCATION.RIGHT;
+		if (a_max == b_min && a_min < b_min)
+			return INTERVAL_LOCATION.CONNECTED_LEFT;
+		if (a_min == b_max && a_max > b_max)
+			return INTERVAL_LOCATION.CONNECTED_RIGHT;
+		if (a_min <= b_min && a_max > b_min && a_max < b_max)
+			return INTERVAL_LOCATION.PARTIALLY_LEFT;
+		if (a_min > b_min && a_min <= b_max && a_max > b_max)
+			return INTERVAL_LOCATION.PARTIALLY_RIGHT;
+		if (a_min >= b_min && a_min <= b_max && a_max >= b_min && a_max <= b_max)
+			return INTERVAL_LOCATION.ENCLOSED;
+		if (a_min < b_min && a_max > b_max)
+			return INTERVAL_LOCATION.ENCLOSING;
+		else
 		{
-			if (a_min < b_min && a_max < b_min)
-				return INTERVAL_LOCATION.LEFT;
-			if (a_min > b_max && a_max > b_max)
-				return INTERVAL_LOCATION.RIGHT;
-			if (a_min <= b_min && a_max > b_min && a_max < b_max)
-				return INTERVAL_LOCATION.PARTIALLY_LEFT;
-			if (a_min > b_min && a_min <= b_max && a_max > b_max)
-				return INTERVAL_LOCATION.PARTIALLY_RIGHT;
-			if (a_min >= b_min && a_min <= b_max && a_max >= b_min && a_max <= b_max)
-				return INTERVAL_LOCATION.ENCLOSED;
-			if (a_min < b_min && a_max > b_max)
-				return INTERVAL_LOCATION.ENCLOSING;
-			else
-			{
-				Debug.LogError("Unknown interval comparison");
-				return INTERVAL_LOCATION.UNKOWN;
-			}				
-		}
-
-		Debug.LogError("Unknown interval comparison");
-		return INTERVAL_LOCATION.UNKOWN;
+			Debug.LogError("Unknown interval comparison");
+			return INTERVAL_LOCATION.UNKOWN;
+		}				
 	}
 
 	static bool findIntersection(Line a, Line b, out Vector2 intersection)
@@ -250,6 +270,7 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		{
 			l.startAngle = Vector2.SignedAngle(Vector2.up, l.start);
 			l.endAngle = Vector2.SignedAngle(Vector2.up, l.end);
+
 			if (l.startAngle < 0)
 				l.startAngle += 360;
 			if (l.endAngle < 0)
@@ -275,26 +296,28 @@ public class TheHeistAlgorithm : MonoBehaviour {
 				l.maxInterval = tempMin;
 			}
 
-			//create two intervals corresponding to a line when the interval contains 0
+			//create two lines corresponding to a line when the interval contains 0
 			if (l.minInterval > l.maxInterval)
 			{
-				//add a new interval for the line
+				//split the line in two lines
 				Line newLine = new Line(l.start, l.end);
 				newLine.startAngle = l.startAngle;
 				newLine.endAngle = l.endAngle;
 				newLine.minInterval = 0;
 				newLine.maxInterval = l.maxInterval;
 				linesToBeAdded.Add(newLine);
-				//update original interval
+				//update original 
 				l.maxInterval = 360;
+				
 			}
 		}
 
 		//add the aditional intervals of the lines
 		tempLines.AddRange(linesToBeAdded);
 		//sort on smallest start of interval
-		tempLines.Sort((x, y) => x.minInterval.CompareTo(y.minInterval));
+		tempLines.Sort( (x,y) => x.minInterval.CompareTo(y.minInterval));
 
+		
 		//print intervals
 		foreach (Line l in tempLines)
 		{
@@ -341,6 +364,7 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		lines.Add(new Line(new Vector2(-4f, 1f), new Vector2(-6f, 1f)));
 		lines.Add(new Line(new Vector2(-1f, 1f), new Vector2(1f, 1f)));
 
+		
 
 		setupLevel(playerPos, guardPos, guardOrientation, coneWidth, coneLength, lines);
 
