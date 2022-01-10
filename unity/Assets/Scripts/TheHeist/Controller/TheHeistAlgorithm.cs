@@ -19,7 +19,7 @@ public class TheHeistAlgorithm : MonoBehaviour {
 	List<Line> OriginalLines;
 
 	static TreeNode root = null;
-	enum INTERVAL_LOCATION {LEFT,RIGHT,PARTIALLY_LEFT, PARTIALLY_RIGHT, ENCLOSED, ENCLOSING, UNKOWN};
+	enum INTERVAL_LOCATION { LEFT, RIGHT, PARTIALLY_LEFT, PARTIALLY_RIGHT, ENCLOSED, ENCLOSING, UNKOWN };
 
 
 	//class to keep track of line properties
@@ -41,6 +41,7 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		public float minInterval = 0f;
 		public float maxInterval = 0f;
 	}
+
 	class TreeNode
 	{
 		public TreeNode(Line line)
@@ -57,6 +58,7 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		public Line line;
 		public float minInterval, maxInterval;
 	}
+
 
 	private void updatePlayerPos(Vector2 newPos)
 	{
@@ -94,9 +96,10 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		root.isRoot = true;
 
 		foreach(Line l in sortedLines)
-		{
+		{			
 			insertLineIntoTree(l, root);
 		}
+
 	}
 
 	static void insertLineIntoTree(Line l, TreeNode node)
@@ -190,6 +193,47 @@ public class TheHeistAlgorithm : MonoBehaviour {
 		return INTERVAL_LOCATION.UNKOWN;
 	}
 
+	static bool findIntersection(Line a, Line b, out Vector2 intersection)
+	{
+		{
+			// Get the segments' parameters.
+			float dx12 = a.end.x - a.start.x;
+			float dy12 = a.end.y - a.start.y;
+			float dx34 = b.end.x - b.start.x;
+			float dy34 = b.end.y - b.start.y;
+
+			// Solve for t1 and t2
+			float denominator = (dy12 * dx34 - dx12 * dy34);
+
+			float t1 =
+				((a.start.x - b.start.x) * dy34 + (b.start.y - a.start.y) * dx34)
+					/ denominator;
+			if (float.IsInfinity(t1))
+			{
+				intersection = new Vector2();
+				return false;
+			}
+
+			float t2 =
+				((b.start.x - a.start.x) * dy12 + (a.start.y - b.start.y) * dx12)
+					/ -denominator;
+
+			// Find the point of intersection.
+			intersection = new Vector2(a.start.x + dx12 * t1, a.start.y + dy12 * t1);
+
+			// The segments intersect if t1 and t2 are between 0 and 1.
+			if(t1 >= 0 && t1 <= 1 && t2 >= 0 && t2 <= 1)
+			{
+				intersection = new Vector2(a.start.x + dx12 * t1, a.start.y + dy12 * t1);
+				return true;
+			}
+			else
+			{
+				intersection = new Vector2();
+				return false;
+			}
+		}
+	}
 
 	List<Line> sortOnRotationalSweep(List<Line> lines)
 	{
