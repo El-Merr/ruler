@@ -22,7 +22,7 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
 
     enum COLOR { RED, BLACK};
     enum DIRECTION { LEFT, RIGHT};
-
+    enum COMPARE { SMALLER, EQUAL, GREATER, UNKOWN}
 
     class Line
     {
@@ -42,35 +42,57 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
         public float startInterval, endInterval;
     }
 
-    class Interval : IComparable
+    class Interval : IInterval
     {
         public bool isLeftEndpoint;
-        public float endpoint;
+        public Endpoint endpoint;
         Line correspondingLine;
         //TODO keep track of intervals in which the endpoint lies.
 
-        public Interval(bool isLeftEndpoint, float endpoint, Line correspondingLine)
+        public Interval(Endpoint endpoint, Line correspondingLine)
         {
-            this.isLeftEndpoint = isLeftEndpoint;
             this.endpoint = endpoint;
             this.correspondingLine = correspondingLine;
         }
-        public int CompareTo(object obj)
+        public COMPARE compare(IInterval other)
         {
-            if (obj == null) return 1;
+            Interval interval = other as Interval;
 
-            Interval otherInterval = obj as Interval;
-            if (otherInterval != null)
-                return this.endpoint.CompareTo(otherInterval.endpoint);
+            if (interval == null)
+                throw new Exception("Other interval to compare is null");
+
+            if (this.endpoint.pos > interval.endpoint.pos)
+                return COMPARE.SMALLER;
+            else if (this.endpoint.pos == interval.endpoint.pos)
+                return COMPARE.EQUAL;
+            else if (this.endpoint.pos < interval.endpoint.pos)
+                return COMPARE.GREATER;
             else
-                throw new ArgumentException("Object is not an interval");
+                return COMPARE.UNKOWN;
         }
     }
+     interface IInterval
+        {
+            COMPARE compare(IInterval other);
+        }
+    class Endpoint
+    {
+        public float pos;
+        public bool isLeft;
+
+        public Endpoint(float pos, bool isLeft)
+        {
+            this.pos = pos;
+            this.isLeft = isLeft;
+        }
+    }
+
+   
 
     class Node
     {
         //comparable data in our case a interval(eindpoint) 
-        public IComparable data;
+        public IInterval data;
 
         //node info
         public Node left;
@@ -78,217 +100,266 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
         public Node parent;
         public COLOR color = COLOR.BLACK;
 
-        //constructors
-        public Node(IComparable data) : this(data, null, null) { }
-        public Node(IComparable data, Node left, Node right)
+        //creates a node with empty children
+        public Node(IInterval data)
+        {
+            setData(data);
+        }
+
+        //sets the data and create empty children because the node is already a leaf.
+        public void setData(IInterval data)
         {
             this.data = data;
-            this.left = left;
-            this.right = right;
+            color = COLOR.RED;
+            left = new Node();
+            right = new Node();
+            left.setParent(this);
+            right.setParent(this);
+        }
+
+        public void setParent(Node parent)
+        {
+            this.parent = parent;
+        }
+
+        public Node()
+        {
+            
         }
     }
 
     class RedBlackTree
     {
-        protected Node root;
-        protected Node currentNode;
+        public Node root;
+
         public  RedBlackTree()
         {
             root = new Node(null);
         }
-        protected int Compare (IComparable item, Node node)
-        {
-            return item.CompareTo(node.data);
-        }
 
-        public void Insert(IComparable data)
+        public void insertInterval(IInterval interval)
         {
-            if (root != null)
-            {
-                if (root.data != null)
-                {
-                    currentNode = root;
-                    while(true)
-                    {
-                        int compareResult = Compare(data, currentNode);
-                        if (compareResult < 0 && currentNode.left != null)
-                            currentNode = currentNode.left;
-                        else if (compareResult >= 0 && currentNode.right != null)
-                            currentNode = currentNode.right;
-                        else if (compareResult < 0 && currentNode.left == null)
-                        {
-                            currentNode.left = new Node(data);
-                            currentNode = currentNode.left;
-                            UpdateRedBlack(currentNode);
-                        }
-                        else if (compareResult >= 0 && currentNode.right == null)
-                        {
-                            currentNode.right = new Node(data);
-                            currentNode = currentNode.right;
-                            UpdateRedBlack(currentNode);
-                        }
-                    }
-                }
-                else
-                {
-                    root.data = data;
-                }
-            }
-            else
-                throw new ArgumentException("Root is null init three first propably");
-
+            insertNode(interval, ref root);
             
         }
 
-        public void UpdateRedBlack(Node node)
+        private void insertNode(IInterval interval, ref Node currentNode)
         {
-            while(node != root && node.parent.color == COLOR.RED)
+            if (currentNode.data == null)
             {
-                //inserted to much at the left??
-                if(node.parent == node.parent.parent.left)
-                {
-                    Node temp = node.parent.parent.right;
-                    if(temp != null && node.color == COLOR.RED)
-                    {
-                        node.parent.color = COLOR.BLACK;
-                        node.color = COLOR.BLACK;
-                        node.parent.parent.color = COLOR.RED;
-                        node = node.parent.parent;
-                    }
-                    else 
-                    {
-                        if (node == node.parent.right)
-                        {
-                            node = node.parent;
-                            LeftRotate(node);
-                        }
-                        node.parent.color = COLOR.BLACK;
-                        node.parent.parent.color = COLOR.RED;
-                        RightRotate(node.parent.parent);
-                    }
-
-                }
-                else //inserted to much at the right??
-                {
-                    Node temp2 = node.parent.parent.left;
-                    if(temp2 != null && temp2.color == COLOR.BLACK)
-                    {
-                        node.parent.color = COLOR.RED;
-                        temp2.color = COLOR.RED;
-                        node.parent.parent.color = COLOR.BLACK;
-                        node = node.parent.parent;
-                    }
-                    else 
-                    {
-                        if (node == node.parent.left)
-                        {
-                            node = node.parent;
-                            RightRotate(node);
-                        }
-                        node.parent.color = COLOR.BLACK;
-                        node.parent.parent.color = COLOR.RED;
-                        LeftRotate(node.parent.parent);
-                    }
-                }
-            }
-        }
-        private void LeftRotate(Node X)
-        {
-            Node Y = X.right; // set Y
-            X.right = Y.left;//turn Y's left subtree into X's right subtree
-            if (Y.left != null)
-            {
-                Y.left.parent = X;
-            }
-            if (Y != null)
-            {
-                Y.parent = X.parent;//link X's parent to Y
-            }
-            if (X.parent == null)
-            {
-                root = Y;
-            }
-            if (X == X.parent.left)
-            {
-                X.parent.left = Y;
+                currentNode.setData(interval);
+                return;
             }
             else
             {
-                X.parent.right = Y;
-            }
-            Y.left = X; //put X on Y's left
-            if (X != null)
-            {
-                X.parent = Y;
+                COMPARE result = currentNode.data.compare(interval);
+                switch (result)
+                {
+                    case COMPARE.SMALLER:
+                        {
+                            insertNode(interval, ref currentNode.left);
+                        }break;
+                    case COMPARE.EQUAL:
+                        {
+                            insertNode(interval, ref currentNode.left);
+                        }break;
+                    case COMPARE.GREATER:
+                        {
+                            insertNode(interval, ref currentNode.right);
+                        }
+                        break;
+                    default:
+                        {
+                            throw new Exception("Can't compare interval data");
+                        }break;
+                }
             }
 
         }
 
-        private void RightRotate(Node Y)
-        {
-            // right rotate is simply mirror code from left rotate
-            Node X = Y.left;
-            Y.left = X.right;
-            if (X.right != null)
-            {
-                X.right.parent = Y;
-            }
-            if (X != null)
-            {
-                X.parent = Y.parent;
-            }
-            if (Y.parent == null)
-            {
-                root = X;
-            }
-            if (Y == Y.parent.right)
-            {
-                Y.parent.right = X;
-            }
-            if (Y == Y.parent.left)
-            {
-                Y.parent.left = X;
-            }
+        //protected int Compare (IInterval item, Node node)
+        //{
+        //    return item.compare(node.data);
+        //}
 
-            X.right = Y;//put Y on X's right
-            if (Y != null)
-            {
-                Y.parent = X;
-            }
-        }
+        //public void Insert(Interval data)
+        //{
+        //    if (root != null)
+        //    {
+        //        if (root.data != null)
+        //        {
+        //            currentNode = root;
+        //            while(true)
+        //            {
+        //                int compareResult = Compare(data, currentNode);
+        //                if (compareResult < 0 && currentNode.left != null)
+        //                    currentNode = currentNode.left;
+        //                else if (compareResult >= 0 && currentNode.right != null)
+        //                    currentNode = currentNode.right;
+        //                else if (compareResult < 0 && currentNode.left == null)
+        //                {
+        //                    currentNode.left = new Node(data);
+        //                    currentNode = currentNode.left;
+        //                    UpdateRedBlack(currentNode);
+        //                }
+        //                else if (compareResult >= 0 && currentNode.right == null)
+        //                {
+        //                    currentNode.right = new Node(data);
+        //                    currentNode = currentNode.right;
+        //                    UpdateRedBlack(currentNode);
+        //                }
+        //            }
+        //        }
+        //        else
+        //        {
+        //            root.data = data;
+        //        }
+        //    }
+        //    else
+        //        throw new ArgumentException("Root is null init three first propably");
+
+            
+        //}
+
+        //public void UpdateRedBlack(Node node)
+        //{
+        //    while(node != root && node.parent.color == COLOR.RED)
+        //    {
+        //        //inserted to much at the left??
+        //        if(node.parent == node.parent.parent.left)
+        //        {
+        //            Node temp = node.parent.parent.right;
+        //            if(temp != null && node.color == COLOR.RED)
+        //            {
+        //                node.parent.color = COLOR.BLACK;
+        //                node.color = COLOR.BLACK;
+        //                node.parent.parent.color = COLOR.RED;
+        //                node = node.parent.parent;
+        //            }
+        //            else 
+        //            {
+        //                if (node == node.parent.right)
+        //                {
+        //                    node = node.parent;
+        //                    LeftRotate(node);
+        //                }
+        //                node.parent.color = COLOR.BLACK;
+        //                node.parent.parent.color = COLOR.RED;
+        //                RightRotate(node.parent.parent);
+        //            }
+
+        //        }
+        //        else //inserted to much at the right??
+        //        {
+        //            Node temp2 = node.parent.parent.left;
+        //            if(temp2 != null && temp2.color == COLOR.BLACK)
+        //            {
+        //                node.parent.color = COLOR.RED;
+        //                temp2.color = COLOR.RED;
+        //                node.parent.parent.color = COLOR.BLACK;
+        //                node = node.parent.parent;
+        //            }
+        //            else 
+        //            {
+        //                if (node == node.parent.left)
+        //                {
+        //                    node = node.parent;
+        //                    RightRotate(node);
+        //                }
+        //                node.parent.color = COLOR.BLACK;
+        //                node.parent.parent.color = COLOR.RED;
+        //                LeftRotate(node.parent.parent);
+        //            }
+        //        }
+        //    }
+        //}
+        //private void LeftRotate(Node X)
+        //{
+        //    Node Y = X.right; // set Y
+        //    X.right = Y.left;//turn Y's left subtree into X's right subtree
+        //    if (Y.left != null)
+        //    {
+        //        Y.left.parent = X;
+        //    }
+        //    if (Y != null)
+        //    {
+        //        Y.parent = X.parent;//link X's parent to Y
+        //    }
+        //    if (X.parent == null)
+        //    {
+        //        root = Y;
+        //    }
+        //    if (X == X.parent.left)
+        //    {
+        //        X.parent.left = Y;
+        //    }
+        //    else
+        //    {
+        //        X.parent.right = Y;
+        //    }
+        //    Y.left = X; //put X on Y's left
+        //    if (X != null)
+        //    {
+        //        X.parent = Y;
+        //    }
+
+        //}
+
+        //private void RightRotate(Node Y)
+        //{
+        //    // right rotate is simply mirror code from left rotate
+        //    Node X = Y.left;
+        //    Y.left = X.right;
+        //    if (X.right != null)
+        //    {
+        //        X.right.parent = Y;
+        //    }
+        //    if (X != null)
+        //    {
+        //        X.parent = Y.parent;
+        //    }
+        //    if (Y.parent == null)
+        //    {
+        //        root = X;
+        //    }
+        //    if (Y == Y.parent.right)
+        //    {
+        //        Y.parent.right = X;
+        //    }
+        //    if (Y == Y.parent.left)
+        //    {
+        //        Y.parent.left = X;
+        //    }
+
+        //    X.right = Y;//put Y on X's right
+        //    if (Y != null)
+        //    {
+        //        Y.parent = X;
+        //    }
+        //}
 
 
-        public Node Search(IComparable data)
-        {
-            currentNode = root;
-            while(true)
-            {
-                int compareResult = Compare(data, currentNode);
+        //public Node Search(IComparable data)
+        //{
+        //    currentNode = root;
+        //    while(true)
+        //    {
+        //        int compareResult = Compare(data, currentNode);
 
-                if (compareResult < 0 && currentNode.left != null)
-                    currentNode = currentNode.left;
-                else if (compareResult > 0 && currentNode.right != null)
-                    currentNode = currentNode.right;
-                else if (compareResult == 0)
-                    return currentNode;
-                else return null;
-            }
-        }
+        //        if (compareResult < 0 && currentNode.left != null)
+        //            currentNode = currentNode.left;
+        //        else if (compareResult > 0 && currentNode.right != null)
+        //            currentNode = currentNode.right;
+        //        else if (compareResult == 0)
+        //            return currentNode;
+        //        else return null;
+        //    }
+        //}
 
 
     }
 
-    class EndPoint
-    {
-        float pos;
-        bool isLeft;
-
-        public EndPoint(float pos, bool isLeft)
-        {
-            this.pos = pos;
-            this.isLeft = isLeft;
-        }
-    }
+    
 
     public bool checkVisibility(Vector2 playerPos, Vector2 guardPos, Vector2 guardOrientation)
     {
@@ -305,17 +376,13 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
         //Get the lines sorted on distances and angles after translating the current level by the guard pos.
         calculateDistanceAndAngle(CurrentLevel, guardPos, out sortedShortestDistance, out sortedLongestDistance, out sortedMiddletDistance, out sortedStartInterval, out sortedEndInterval);
 
-        //Create bst for endpoints
+        //create inteval tree
         RedBlackTree tree = new RedBlackTree();
-        foreach(Line l in sortedStartInterval)
+        foreach(Line l in sortedMiddletDistance)
         {
-            tree.Insert(new Interval(true, l.startInterval, l));
-            tree.Insert(new Interval(false, l.endInterval, l));
-
+            tree.insertInterval(new Interval(new Endpoint(l.startInterval,true), l));
+            tree.insertInterval(new Interval(new Endpoint(l.endInterval, false), l));
         }
-
-
-
 
         return true;
     }
@@ -440,7 +507,6 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
     // Use this for initialization
     void Start()
     {
-
         List<Line> lines = new List<Line>();
         lines.Add(new Line(new Vector2(1f, 1f), new Vector2(3f, 1f)));
         lines.Add(new Line(new Vector2(4f, 1f), new Vector2(5f, 1f)));
