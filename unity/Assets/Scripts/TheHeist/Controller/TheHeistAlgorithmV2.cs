@@ -2,10 +2,10 @@
 using UnityEngine;
 using System.Collections;
 using System;
+using Util.DataStructures.BST;
 
 public class TheHeistAlgorithmV2 : MonoBehaviour
 {
-
     // position of the player,guard and objects.
     [SerializeField]
     Vector2 playerPos;
@@ -37,24 +37,40 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
             start += translation;
             end += translation;
         }
+
+        public bool equal(Line other)
+        {
+            if (this.start == other.start && this.end == other.end)
+            {
+                return true;
+            }
+            else
+                return false;
+        }
+
         public Vector2 start, end, middle;
         public float startDistance, endDistance, shortestDistance, longestDistance, middleDistance;
         public float startInterval, endInterval;
     }
 
-    class Interval : IInterval
+    class Interval
     {
         public bool isLeftEndpoint;
         public Endpoint endpoint;
-        Line correspondingLine;
+        public float startInterval, endInterval;
+        public Line correspondingLine;
+        public List<Interval> intervals = new List<Interval>();
+        
         //TODO keep track of intervals in which the endpoint lies.
 
         public Interval(Endpoint endpoint, Line correspondingLine)
         {
+            this.startInterval = correspondingLine.startInterval;
+            this.endInterval = correspondingLine.endInterval;
             this.endpoint = endpoint;
             this.correspondingLine = correspondingLine;
         }
-        public COMPARE compare(IInterval other)
+        public COMPARE compare(Interval other)
         {
             Interval interval = other as Interval;
 
@@ -79,11 +95,11 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
                 return "No endpoint avaiable";
         }
     }
-     interface IInterval
-        {
-            COMPARE compare(IInterval other);
-            string print();
-        }
+     //interface IInterval
+     //   {
+     //       COMPARE compare(IInterval other);
+     //       string print();
+     //   }
     class Endpoint
     {
         public float pos;
@@ -101,8 +117,8 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
     class Node
     {
         //comparable data in our case a interval(eindpoint) 
-        public IInterval data;
-
+        public Interval data;
+        public List<Interval> intervals = new List<Interval>();
         //node info
         public Node left;
         public Node right;
@@ -111,13 +127,13 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
         public COLOR color = COLOR.BLACK;
 
         //creates a node with empty children
-        public Node(IInterval data)
+        public Node(Interval data)
         {
             setData(data);
         }
 
         //sets the data and create empty children because the node is already a leaf.
-        public void setData(IInterval data)
+        public void setData(Interval data)
         {
             this.data = data;
             color = COLOR.RED;
@@ -127,6 +143,8 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
             right.setParent(this);
             left.isLeftChild = true;
             right.isLeftChild = false;
+            if(data != null)
+                this.intervals = data.intervals;
         }
 
         public void setParent(Node parent)
@@ -180,7 +198,7 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
             root = new Node(null);
         }
 
-        public void insertInterval(IInterval interval)
+        public void insertInterval(Interval interval)
         {
             insertNode(interval, ref root);
             
@@ -210,7 +228,16 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
             if (currentNode.right != null)
                 printNode(ref currentNode.right);
         }
-        private void insertNode(IInterval interval, ref Node currentNode)
+
+        public void Query(float angle, ref Node currentNode)
+        {
+            if(angle < currentNode.data.endpoint.pos)
+            {
+
+            }
+        }
+
+        private void insertNode(Interval interval, ref Node currentNode)
         {
             if (currentNode.data == null)
             {
@@ -219,19 +246,152 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
             }
             else
             {
+                //keep track of known intervals
+                List<Interval> knownIntervals = new List<Interval>();
+                foreach(Interval i in currentNode.intervals)
+                {
+                    bool alreadyKnown = false;
+                    foreach(Interval ii in interval.intervals)
+                    {
+                        if(ii.correspondingLine.equal(i.correspondingLine))
+                        {
+                            alreadyKnown = true;
+                        }
+                    }
+                    if(alreadyKnown == false)
+                        knownIntervals.Add(i);
+                }
+                
+                foreach(Interval I in knownIntervals)
+                {
+                    interval.intervals.Add(I);
+                }
+
+
+
                 COMPARE result = currentNode.data.compare(interval);
                 switch (result)
                 {
                     case COMPARE.SMALLER:
                         {
+                            if(currentNode.data.endpoint.isLeft)
+                            {
+                                List<Interval> tempList = new List<Interval>();
+                                foreach (Interval I in interval.intervals)
+                                {
+                                    if (!I.correspondingLine.equal(currentNode.data.correspondingLine))
+                                    {
+                                        tempList.Add(I);
+                                    }
+                                }
+                                interval.intervals = tempList;
+                                //uit known intervals
+                            }
+                            else
+                            {
+                                interval.intervals.Add(currentNode.data);
+                            }
+
+
+                            if(interval.endpoint.isLeft)
+                            {
+                                currentNode.intervals.Add(interval);
+                                //ligt in interval
+                            }
+                            else
+                            {
+                                List<Interval> tempList = new List<Interval>();
+                                foreach(Interval I in currentNode.intervals)
+                                {
+                                    if(!I.correspondingLine.equal(interval.correspondingLine))
+                                    {
+                                        tempList.Add(I);
+                                    }
+                                }
+
+                                currentNode.intervals = tempList;
+                                //lig niet in interval
+                            }
                             insertNode(interval, ref currentNode.left);
                         }break;
                     case COMPARE.EQUAL:
                         {
+                            if (currentNode.data.endpoint.isLeft)
+                            {
+                                List<Interval> tempList = new List<Interval>();
+                                foreach (Interval I in interval.intervals)
+                                {
+                                    if (!I.correspondingLine.equal(currentNode.data.correspondingLine))
+                                    {
+                                        tempList.Add(I);
+                                    }
+                                }
+                                interval.intervals = tempList;
+                                //uit known intervals
+                            }
+                            else
+                            {
+                                interval.intervals.Add(currentNode.data);
+                            }
+
+                            if (interval.endpoint.isLeft)
+                            {
+                                currentNode.intervals.Add(interval);
+                                //ligt in interval
+                            }
+                            else
+                            {
+                                List<Interval> tempList = new List<Interval>();
+                                foreach (Interval I in currentNode.intervals)
+                                {
+                                    if (!I.correspondingLine.equal(interval.correspondingLine))
+                                    {
+                                        tempList.Add(I);
+                                    }
+                                }
+                                currentNode.intervals = tempList;
+                                //lig niet in interval
+                            }
                             insertNode(interval, ref currentNode.left);
                         }break;
                     case COMPARE.GREATER:
                         {
+                            if (currentNode.data.endpoint.isLeft)
+                            {
+                                interval.intervals.Add(currentNode.data);                               
+                            }
+                            else
+                            {
+                                List<Interval> tempList = new List<Interval>();
+                                foreach (Interval I in interval.intervals)
+                                {
+                                    if (!I.correspondingLine.equal(currentNode.data.correspondingLine))
+                                    {
+                                        tempList.Add(I);
+                                    }
+                                }
+                                interval.intervals = tempList;
+                                //uit known intervals
+                            }
+
+                            if (interval.endpoint.isLeft)
+                            {
+                                List<Interval> tempList = new List<Interval>();
+                                foreach (Interval I in currentNode.intervals)
+                                {
+                                    if (!I.correspondingLine.equal(interval.correspondingLine))
+                                    {
+                                        tempList.Add(I);
+                                    }
+                                }
+                                currentNode.intervals = tempList;
+                                //ligt niet in interval
+                            }
+                            else
+                            {
+                                currentNode.intervals.Add(interval);
+                                //lig in interval
+                            }
                             insertNode(interval, ref currentNode.right);
                         }
                         break;
@@ -246,79 +406,79 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
 
         private void balance(ref Node currentNode)
         {
-            if (currentNode.parent == null) //root
-            {
-                currentNode.color = COLOR.BLACK;
-                return;
-            }
-            else if(currentNode.parent.color == COLOR.BLACK)  //parent is black
-            {
-                return;
-            }
-            else if(currentNode.parent.color == COLOR.RED) // parent is red
-            {
-                if(currentNode.parent.parent != null) //grandparent exists
-                {
-                    if(currentNode.parent.isLeftChild) // parent is a left child
-                    {
-                        if(currentNode.parent.parent.right != null) // rightsibling exists
-                        {
-                            if(currentNode.parent.parent.right.color == COLOR.RED) // right sibling is red
-                            {
-                                currentNode.parent.parent.right.color = COLOR.BLACK;
-                                currentNode.parent.color = COLOR.BLACK;
-                            }
-                            else //right sibling is black
-                            {
-                                //check black or null rotation an recolour
-                                //rotate and recolour
-                            }
-                        }
-                        else // right sibling is null
-                        {
-                            //rotate and recolour
-                        }
-                    }
-                    else // parent is a right child
-                    {
-                        if(currentNode.parent.parent.left!= null) // left sibling exits
-                        {
-                            if(currentNode.parent.parent.left.color == COLOR.RED)//left sibling is red
-                            {
-                                currentNode.parent.parent.left.color = COLOR.BLACK;
-                                currentNode.parent.color = COLOR.BLACK;
-                            }
-                            else //left sibling is black
-                            {
-                                //rotate and recolour
-                            }
-                        }
-                        else // left sibling is null
-                        {
-                            //rotate and recolour
-                        }
-                    }
-                }
-                else //grand parent doesn't exist
-                {
-                    //rotation an recolour
-                }
-            }
+            //if (currentNode.parent == null) //root
+            //{
+            //    currentNode.color = COLOR.BLACK;
+            //    return;
+            //}
+            //else if(currentNode.parent.color == COLOR.BLACK)  //parent is black
+            //{
+            //    return;
+            //}
+            //else if(currentNode.parent.color == COLOR.RED) // parent is red
+            //{
+            //    if(currentNode.parent.parent != null) //grandparent exists
+            //    {
+            //        if(currentNode.parent.isLeftChild) // parent is a left child
+            //        {
+            //            if(currentNode.parent.parent.right != null) // rightsibling exists
+            //            {
+            //                if(currentNode.parent.parent.right.color == COLOR.RED) // right sibling is red
+            //                {
+            //                    currentNode.parent.parent.right.color = COLOR.BLACK;
+            //                    currentNode.parent.color = COLOR.BLACK;
+            //                }
+            //                else //right sibling is black
+            //                {
+            //                    //check black or null rotation an recolour
+            //                    //rotate and recolour
+            //                }
+            //            }
+            //            else // right sibling is null
+            //            {
+            //                //rotate and recolour
+            //            }
+            //        }
+            //        else // parent is a right child
+            //        {
+            //            if(currentNode.parent.parent.left!= null) // left sibling exits
+            //            {
+            //                if(currentNode.parent.parent.left.color == COLOR.RED)//left sibling is red
+            //                {
+            //                    currentNode.parent.parent.left.color = COLOR.BLACK;
+            //                    currentNode.parent.color = COLOR.BLACK;
+            //                }
+            //                else //left sibling is black
+            //                {
+            //                    //rotate and recolour
+            //                }
+            //            }
+            //            else // left sibling is null
+            //            {
+            //                //rotate and recolour
+            //            }
+            //        }
+            //    }
+            //    else //grand parent doesn't exist
+            //    {
+            //        //rotation an recolour
+            //    }
+            //}
 
         }
 
         private void rotate(bool leftRotation, ref Node currentNode)
         {
-            if(leftRotation)
-            {
-                Node parentCurrentNode = currentNode.parent;
-
-
-            }
-            else
-            {
+            //if(leftRotation)
+            //{
                 
-            }
+
+
+            //}
+            //else
+            //{
+                
+            //}
 
 
         }
@@ -475,14 +635,55 @@ public class TheHeistAlgorithmV2 : MonoBehaviour
     void Start()
     {
         List<Line> lines = new List<Line>();
-        lines.Add(new Line(new Vector2(1f, 1f), new Vector2(3f, 1f)));
-        lines.Add(new Line(new Vector2(4f, 1f), new Vector2(5f, 1f)));
-        lines.Add(new Line(new Vector2(-1f, 1f), new Vector2(-3f, 1f)));
-        lines.Add(new Line(new Vector2(-4f, 1f), new Vector2(-6f, 1f)));
-        lines.Add(new Line(new Vector2(-1f, 1f), new Vector2(1f, 1f)));
+
+        lines.Add(new Line(new Vector2(64,768), new Vector2(256, 672)));
+        lines.Add(new Line(new Vector2(256,672), new Vector2(288, 672)));
+        lines.Add(new Line(new Vector2(288,672), new Vector2(288, 640)));
+        lines.Add(new Line(new Vector2(288,640), new Vector2(256, 640)));
+        lines.Add(new Line(new Vector2(256,640), new Vector2(256, 576)));
+        lines.Add(new Line(new Vector2(256,576), new Vector2(448, 576)));
+        lines.Add(new Line(new Vector2(448,576), new Vector2(448, 384)));
+        lines.Add(new Line(new Vector2(448,384), new Vector2(256, 384)));
+        lines.Add(new Line(new Vector2(256,384), new Vector2(256, 512)));
+        lines.Add(new Line(new Vector2(256,512), new Vector2(192, 512)));
+        lines.Add(new Line(new Vector2(192,512), new Vector2(192, 576)));
+        lines.Add(new Line(new Vector2(192,576), new Vector2(160, 576)));
+        lines.Add(new Line(new Vector2(160,576), new Vector2(160, 608)));
+        lines.Add(new Line(new Vector2(160,608), new Vector2(128, 608)));
+        lines.Add(new Line(new Vector2(128,608), new Vector2(128, 576)));
+        lines.Add(new Line(new Vector2(128,576), new Vector2(64, 576)));
+        lines.Add(new Line(new Vector2(64,576), new Vector2(64, 768)));
+
+
+        //lines.Add(new Line(new Vector2(1f, 1f), new Vector2(3f, 1f)));
+        //lines.Add(new Line(new Vector2(4f, 1f), new Vector2(5f, 1f)));
+        //lines.Add(new Line(new Vector2(-1f, 1f), new Vector2(-3f, 1f)));
+        //lines.Add(new Line(new Vector2(-4f, 1f), new Vector2(-6f, 1f)));
+        //lines.Add(new Line(new Vector2(-1f, 1f), new Vector2(1f, 1f)));
         CurrentLevel = lines;
 
-        checkVisibility(Vector2.zero, Vector2.zero, Vector2.zero);
+        checkVisibility(Vector2.zero, new Vector2(432,560), Vector2.zero);
+
+        Debug.Log("dlkdjf");
+
+//        64 768 m
+//256 768 l
+//256 672 l
+//288 672 l
+//288 640 l
+//256 640 l
+//256 576 l
+//448 576 l
+//448 384 l
+//256 384 l
+//256 512 l
+//192 512 l
+//192 576 l
+//160 576 l
+//160 608 l
+//128 608 l
+//128 576 l
+//64 576 l
     }
 
 
