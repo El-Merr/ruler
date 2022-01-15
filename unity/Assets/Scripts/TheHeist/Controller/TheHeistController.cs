@@ -477,8 +477,8 @@
             if (LevelPolygon.ContainsInside(m_guard.Pos))
             {
                 // calculate new visibility polygon using the sweepline algorithm and a cone query
-                var vision = gameObject.GetComponent<TheHeistAlgorithmV2>()
-                    .Vision(LevelPolygon, m_guard.Pos, new Vector3(0,0,0), m_guard.ori);
+                Polygon2D vision = gameObject.GetComponent<TheHeistVisibilityAlgorithm>()
+                    .VisionCone(LevelPolygon, m_guard.Pos, new Vector2(0,0), m_guard.ori);
                 //var vision = visionWithHoles.Outside;
                 var lines = LevelPolygon.Segments;
 
