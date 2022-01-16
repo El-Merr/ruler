@@ -34,11 +34,18 @@
 
         public class Line
         {
+            public Vector2 start, end, middle;
+            public float startDistance, endDistance, shortestDistance, longestDistance, middleDistance;
+            public float startInterval, endInterval;
+
             public Line(Vector2 start, Vector2 end)
             {
                 this.start = start;
                 this.end = end;
-                this.middle = ((end - start) / 2) + end;
+
+                float x = (start.x + end.x) / 2;
+                float y = (start.y + end.y)/ 2;
+                this.middle = new Vector2(x, y);
 
                 this.segment = new LineSegment(start, end);
             }
@@ -50,9 +57,7 @@
                 start += translation;
                 end += translation;
             }
-            public Vector2 start, end, middle;
-            public float startDistance, endDistance, shortestDistance, longestDistance, middleDistance;
-            public float startInterval, endInterval;
+
 
             public bool equal(Line other)
             {
@@ -71,9 +76,7 @@
             public Intervalpoint intervalpoint;
             public float startInterval, endInterval;
             public Line correspondingLine;
-            public List<Interval> intervals = new List<Interval>();
 
-            //TODO keep track of intervals in which the endpoint lies.
 
             public Interval(Intervalpoint endpoint, Line correspondingLine)
             {
@@ -155,8 +158,6 @@
                 right.setParent(this);
                 left.isLeftChild = true;
                 right.isLeftChild = false;
-                if (data != null)
-                    this.isInIntervals = data.intervals;
             }
 
             public void setParent(Node parent)
@@ -250,6 +251,59 @@
             }
 
 
+            public void UpdateWithParent(ref Node currentNode)
+            {
+                if(currentNode.parent != null) //not the root
+                {
+                    //check if currentnode is start or end because it will be in out in the parent
+                    if (currentNode.data.intervalpoint.angle <= currentNode.parent.data.intervalpoint.angle) //left child
+                    {
+                        //check own interval
+                       if(currentNode.parent.data.intervalpoint.isLeft) //parent node is start
+                       {
+                            currentNode.isOutIntervals.Add(currentNode.parent.data);
+                       }
+
+                        currentNode.isInIntervals = ListExclusiveCombine(currentNode.parent.isInIntervals, currentNode.isInIntervals);
+                        currentNode.isOutIntervals = ListExclusiveCombine(currentNode.parent.isOutIntervals, currentNode.isOutIntervals);//copy parents intervals
+
+                        currentNode.isOutIntervals = ListElementRemover(currentNode.isOutIntervals, currentNode.data); // remove self from out list if there
+                        currentNode.isInIntervals = ListElementRemover(currentNode.isInIntervals, currentNode.data);
+
+                        currentNode.isInIntervals.Add(currentNode.data);  //add self to intervals
+                        currentNode.isInIntervals = ListSubstractor(currentNode.isInIntervals, currentNode.isOutIntervals); //update in intervals with out intervals
+                        
+                    }
+                    else //right child
+                    {
+                        //check own interval
+                        if (!currentNode.parent.data.intervalpoint.isLeft) //parent node is end
+                        {
+                            currentNode.isOutIntervals.Add(currentNode.parent.data);
+                        }
+
+                        currentNode.isInIntervals = ListExclusiveCombine(currentNode.parent.isInIntervals, currentNode.isInIntervals);
+                        currentNode.isOutIntervals = ListExclusiveCombine(currentNode.parent.isOutIntervals, currentNode.isOutIntervals);//copy parents intervals
+
+                        currentNode.isOutIntervals = ListElementRemover(currentNode.isOutIntervals, currentNode.data); // remove self from out list if there
+                        currentNode.isInIntervals = ListElementRemover(currentNode.isInIntervals, currentNode.data); // remove self from out list if there
+
+                        currentNode.isInIntervals.Add(currentNode.data);  //add self to intervals
+                        currentNode.isInIntervals = ListSubstractor(currentNode.isInIntervals, currentNode.isOutIntervals); //update in intervals with out intervals
+                    }
+                }
+                else //the root
+                {
+                    currentNode.isInIntervals.Add(currentNode.data);
+                }              
+
+                
+                //get interval info of parent
+                //update when left or right child.
+
+
+            }
+
             public void UpdateNode(float angle, bool isLeft, ref Node currentNode, List<Interval> inIntervals, List<Interval> outIntervals)
             {
                 if (currentNode.data.intervalpoint.angle == angle && currentNode.data.intervalpoint.isLeft == isLeft)
@@ -271,6 +325,7 @@
                            UpdateNode(angle, isLeft, ref currentNode.left, inIntervals, outIntervals);
                         else
                         {
+                            Debug.Log("Could not find specific node");
                             return;
                         }
                     }
@@ -280,17 +335,18 @@
                             UpdateNode(angle, isLeft, ref currentNode.right, inIntervals, outIntervals);
                         else
                         {
+                            Debug.Log("Could not find specific node");
                             return;
                         }
                     }
                 }
             }
 
-            public Interval Search(float angle, bool isLeft, ref Node currentNode)
+            public Node Search(float angle, bool isLeft, ref Node currentNode)
             {
                 if (currentNode.data.intervalpoint.angle == angle && currentNode.data.intervalpoint.isLeft == isLeft)
                 {
-                    return currentNode.data;
+                    return currentNode;
                 } else
                 {
                     if (angle <= currentNode.data.intervalpoint.angle)
@@ -299,7 +355,7 @@
                             return Search(angle, isLeft, ref currentNode.left);
                         else
                         {
-                            return currentNode.data;
+                            return currentNode;
                         }
                     }
                     else 
@@ -308,7 +364,7 @@
                             return Search(angle, isLeft, ref currentNode.right);
                         else
                         {
-                            return currentNode.data;
+                            return currentNode;
                         }
                     }
                 }
@@ -357,38 +413,31 @@
                 return finalList;
             }
 
+            public List<Interval> ListElementRemover(List<Interval> list, Interval element)
+            {
+                List<Interval> finalList = new List<Interval>();
+                foreach(Interval i in list)
+                {
+                    if(!i.correspondingLine.equal(element.correspondingLine) && i.intervalpoint.isLeft != element.intervalpoint.isLeft)
+                    {
+                        finalList.Add(i);
+                    }    
+                }
+                return finalList;
+            }
+
+
 
             private void insertNode(Interval interval, ref Node currentNode)
             {
                 if (currentNode.data == null)
                 {
                     currentNode.setData(interval);
+                    UpdateWithParent(ref currentNode);
                     return;
                 }
                 else
                 {
-                    ////keep track of known intervals
-                    //List<Interval> knownIntervals = new List<Interval>();
-                    //foreach (Interval i in currentNode.intervals)
-                    //{
-                    //    bool alreadyKnown = false;
-                    //    foreach (Interval ii in interval.intervals)
-                    //    {
-                    //        if (ii.correspondingLine.equal(i.correspondingLine))
-                    //        {
-                    //            alreadyKnown = true;
-                    //        }
-                    //    }
-                    //    if (alreadyKnown == false)
-                    //        knownIntervals.Add(i);
-                    //}
-
-                    //foreach (Interval I in knownIntervals)
-                    //{
-                    //    interval.intervals.Add(I);
-                    //}
-
-
 
                     COMPARE result = currentNode.data.compare(interval);
                     switch (result)
@@ -472,12 +521,23 @@
                 foreach (Line l in sortedMiddletDistance)
                 {
                     tree.insertInterval(new Interval(new Intervalpoint(l.startInterval, true), l));
-                    tree.UpdateNode(l.startInterval, true, ref tree.root, new List<Interval>(), new List<Interval>());
                     tree.insertInterval(new Interval(new Intervalpoint(l.endInterval, false), l));
-                    tree.UpdateNode(l.startInterval, false, ref tree.root, new List<Interval>(), new List<Interval>());
-                }
 
-                //tree.print();
+
+
+
+                //tree.insertInterval(new Interval(new Intervalpoint(l.startInterval, true), l));
+                ////Node startNode = tree.Search(l.startInterval, true, ref tree.root);
+                ////tree.UpdateNode2(ref startNode);  
+
+                //tree.UpdateNode(l.startInterval, true, ref tree.root, new List<Interval>(), new List<Interval>());
+                //tree.insertInterval(new Interval(new Intervalpoint(l.endInterval, false), l));
+                ////Node endNode = tree.Search(l.endInterval, false, ref tree.root);
+                ////tree.UpdateNode2(ref endNode);
+                //tree.UpdateNode(l.endInterval, false, ref tree.root, new List<Interval>(), new List<Interval>());
+            }
+
+            tree.print();
 
                 return true;
         }
@@ -587,27 +647,34 @@
 
 
 
-            CurrentLevel = lines;
-            //CurrentLevel = new List<Line>();
-            //CurrentLevel.Add(new Line(new Vector2(432, 590), new Vector2(432, 530)));
-            //CurrentLevel.Add(new Line(new Vector2(420, 560), new Vector2(420, 500)));
-            //checkVisibility(guardPos, playerPos, guardOrientation);
-            bool playerHiding = false;
-            foreach(Line l in CurrentLevel)
-            {
-                if (!playerVisible(playerPos, guardPos, l))
-                    playerHiding = true;
-            }
+            //CurrentLevel = lines;
+            CurrentLevel = new List<Line>();
+            //CurrentLevel.Add(new Line(new Vector2(-5, 10), new Vector2(5, 10)));
+            //CurrentLevel.Add(new Line(new Vector2(-10, 11), new Vector2(10, 11)));
+            //checkVisibility(Vector2.zero, playerPos, guardOrientation);
 
-            if (playerHiding)
-            {
-                Debug.Log("Player is hiding");
+            CurrentLevel.Add(new Line(new Vector2(400, 500), new Vector2(400, 560)));
+            CurrentLevel.Add(new Line(new Vector2(410, 530), new Vector2(410, 590)));
+            checkVisibility(Vector2.zero, new Vector2(430, 520), Vector2.zero);
 
-            }
-            else
-            {
-                Debug.Log("Player is not hiding");               
-            }
+
+            //HIDING LOGIC
+            //bool playerHiding = false;
+            //foreach(Line l in CurrentLevel)
+            //{
+            //    if (!playerVisible(playerPos, guardPos, l))
+            //        playerHiding = true;
+            //}
+
+            //if (playerHiding)
+            //{
+            //    Debug.Log("Player is hiding");
+
+            //}
+            //else
+            //{
+            //    Debug.Log("Player is not hiding");               
+            //}
 
 
 
