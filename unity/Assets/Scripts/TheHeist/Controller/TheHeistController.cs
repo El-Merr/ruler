@@ -151,7 +151,7 @@
                     playerStart = m_playerScript.transform.position;
                     MoveGuards();
                     //print(t * speed);
-                    print(t * speed % 0.2);
+                    //print(t * speed % 0.2);
                     if (t * speed >= 1)
                     {
                         guardStarts.Clear();
